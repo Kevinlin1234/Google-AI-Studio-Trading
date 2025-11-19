@@ -53,11 +53,10 @@
       /* Resizing Utilities */
       .resizing {
         user-select: none;
-        pointer-events: none;
+        /* Removed global pointer-events: none; to handle it more selectively via Tailwind utilities */
       }
-      .resizing * {
-        user-select: none;
-        pointer-events: none;
+      .resizing body {
+         cursor: col-resize; /* Fallback, though usually set on specific handle direction */
       }
     </style>
   <script type="importmap">

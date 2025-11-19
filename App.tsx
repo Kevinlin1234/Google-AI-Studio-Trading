@@ -1,11 +1,12 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrainCircuit, DollarSign, Lock, Play, Pause, Wifi, Layout, RefreshCw, GripVertical, GripHorizontal } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SUPPORTED_COINS, INITIAL_CASH } from './constants';
-import { CoinSymbol, MarketData, Order, Portfolio, OrderSide, OrderStatus, AiDecision } from './types';
+import { CoinSymbol, MarketData, Order, Portfolio, OrderSide, OrderStatus, AiDecision, CandleData } from './types';
 import { analyzeMarket } from './services/geminiService';
 import { fetchHistoricalPrices, subscribeToMarketData, placeBinanceOrder } from './services/binanceService';
-import Chart from './components/Chart';
+import TradingViewChart from './components/TradingViewChart';
 import OrderHistory from './components/OrderHistory';
 
 const App: React.FC = () => {
@@ -38,7 +39,7 @@ const App: React.FC = () => {
 
   // Layout State
   const [sidebarWidth, setSidebarWidth] = useState(260);
-  const [chartHeightPercent, setChartHeightPercent] = useState(60);
+  const [chartHeightPercent, setChartHeightPercent] = useState(75);
   const [executionPanelWidthPercent, setExecutionPanelWidthPercent] = useState(40);
 
   // --- Refs for AI Loop State Access ---
@@ -55,6 +56,7 @@ const App: React.FC = () => {
   // --- Layout Resizing Handlers ---
   const startResizingSidebar = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsResizing(true);
     const startX = e.clientX;
     const startWidth = sidebarWidth;
@@ -74,6 +76,7 @@ const App: React.FC = () => {
 
   const startResizingChart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsResizing(true);
     const containerHeight = document.getElementById('main-content')?.clientHeight || 800;
     const startY = e.clientY;
@@ -95,6 +98,7 @@ const App: React.FC = () => {
 
   const startResizingBottomPanel = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsResizing(true);
     const containerWidth = document.getElementById('bottom-panel')?.clientWidth || 1000;
     const startX = e.clientX;
@@ -116,7 +120,7 @@ const App: React.FC = () => {
 
   const resetLayout = () => {
       setSidebarWidth(260);
-      setChartHeightPercent(60);
+      setChartHeightPercent(75);
       setExecutionPanelWidthPercent(40);
   };
 
@@ -131,7 +135,7 @@ const App: React.FC = () => {
         if (history && history.length > 0) {
           newMarketData[sym] = {
             ...newMarketData[sym],
-            price: history[history.length - 1].price,
+            price: history[history.length - 1].close,
             history: history
           };
         }
@@ -154,14 +158,35 @@ const App: React.FC = () => {
             const lastPoint = newHistory[newHistory.length - 1];
 
             if (lastPoint && lastPoint.time === timeStr) {
-                newHistory[newHistory.length - 1] = { ...lastPoint, price: update.price };
+                // Update existing minute candle
+                newHistory[newHistory.length - 1] = { 
+                    ...lastPoint, 
+                    close: update.price,
+                    high: Math.max(lastPoint.high, update.price),
+                    low: Math.min(lastPoint.low, update.price)
+                };
             } else {
-                newHistory.push({ time: timeStr, price: update.price });
-                if (newHistory.length > 50) newHistory.shift();
+                // Start new candle
+                const newCandle: CandleData = {
+                    time: timeStr,
+                    open: update.price,
+                    high: update.price,
+                    low: update.price,
+                    close: update.price
+                };
+                newHistory.push(newCandle);
+                if (newHistory.length > 60) newHistory.shift();
             }
 
+            // Handle empty history case if init failed
             if (newHistory.length === 0) {
-                newHistory = [{ time: timeStr, price: update.price }];
+                newHistory = [{ 
+                    time: timeStr, 
+                    open: update.price, 
+                    high: update.price, 
+                    low: update.price, 
+                    close: update.price 
+                }];
             }
 
             return {
@@ -265,7 +290,8 @@ const App: React.FC = () => {
 
         if (!data || !data.history.length) return;
 
-        const prices = data.history.map(h => h.price);
+        // Use closing prices for analysis
+        const prices = data.history.map(h => h.close);
         
         addAiLog(`Analyzing ${currentSymbol} market structure...`, 'neutral');
         
@@ -320,8 +346,13 @@ const App: React.FC = () => {
   return (
     <div className={`min-h-screen bg-background text-zinc-100 font-sans selection:bg-primary selection:text-white overflow-hidden flex flex-col ${isResizing ? 'resizing cursor-col-resize' : ''}`}>
       
+      {/* Global Resize Overlay */}
+      {isResizing && (
+          <div className="fixed inset-0 z-50 bg-transparent cursor-row-resize" style={{ cursor: 'inherit' }}></div>
+      )}
+
       {/* Header */}
-      <header className="border-b border-zinc-800 bg-surface/50 backdrop-blur-md px-6 py-3 flex items-center justify-between sticky top-0 z-50 h-16 shrink-0">
+      <header className="border-b border-zinc-800 bg-surface/50 backdrop-blur-md px-6 py-3 flex items-center justify-between sticky top-0 z-40 h-16 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded bg-gradient-to-br from-primary to-accent flex items-center justify-center">
             <BrainCircuit className="text-white" size={18} />
@@ -418,7 +449,7 @@ const App: React.FC = () => {
 
            {/* Sidebar Resize Handle */}
            <div 
-             className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors z-50 group flex items-center justify-center"
+             className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors z-[60] group flex items-center justify-center touch-none"
              onMouseDown={startResizingSidebar}
            >
                 <div className="h-8 w-1 rounded-full bg-zinc-700 group-hover:bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -429,30 +460,11 @@ const App: React.FC = () => {
         <div id="main-content" className="flex-1 flex flex-col min-w-0 bg-background/50 h-full relative">
            
            {/* Chart Section (Top) */}
-           <div style={{ height: `${chartHeightPercent}%` }} className="flex flex-col border-b border-zinc-800 p-4 min-h-[200px] relative">
-               {/* Header Row */}
-               <div className="flex justify-between items-start mb-4 shrink-0">
-                   <div className="min-w-0">
-                      <div className="flex items-baseline gap-3 flex-wrap">
-                         {currentAsset.price > 0 ? (
-                             <h2 className="text-2xl md:text-3xl font-bold tracking-tight font-mono whitespace-nowrap">
-                                {currentAsset.price.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })}
-                             </h2>
-                         ) : (
-                             <div className="h-9 w-48 bg-zinc-800 rounded animate-pulse"></div>
-                         )}
-                         <span className={`text-sm font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${isUp ? 'bg-success/20 text-success' : 'bg-danger/20 text-danger'}`}>
-                            {isUp ? '+' : ''}{currentAsset.change24h.toFixed(2)}%
-                         </span>
-                      </div>
-                      <p className="text-zinc-500 text-sm mt-1 flex items-center gap-1 whitespace-nowrap">
-                         <Wifi size={14} className={connectionStatus === 'connected' ? 'text-success' : 'text-zinc-600'} /> 
-                         {connectionStatus === 'connected' ? 'Real-time' : 'Connecting...'}
-                      </p>
-                   </div>
-                   
-                   {/* AI Toggle */}
-                   <div className={`flex items-center gap-3 p-1.5 rounded-lg border shrink-0 ${aiEnabled ? 'bg-accent/10 border-accent/30' : 'bg-zinc-900 border-zinc-700'}`}>
+           <div style={{ height: `${chartHeightPercent}%` }} className="flex flex-col border-b border-zinc-800 min-h-[200px] relative bg-black z-10">
+               
+               {/* AI Toggle Overlay */}
+               <div className="absolute top-4 right-20 z-30">
+                   <div className={`flex items-center gap-3 p-1.5 rounded-lg border backdrop-blur-md shadow-xl ${aiEnabled ? 'bg-surface/80 border-accent/50' : 'bg-surface/80 border-zinc-700'}`}>
                       <div className="px-3 text-right hidden sm:block">
                         <span className={`block text-xs font-bold ${aiEnabled ? 'text-accent' : 'text-zinc-400'}`}>AI AUTO-TRADER</span>
                         <span className="text-[10px] text-zinc-500">{aiEnabled ? 'Gemini 2.5' : 'Standby'}</span>
@@ -466,32 +478,21 @@ const App: React.FC = () => {
                    </div>
                </div>
 
-               <div className="flex-1 w-full relative bg-zinc-900/30 rounded-xl border border-zinc-800/50 overflow-hidden">
-                  {isLoading && currentAsset.history.length === 0 ? (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                            <span className="text-xs text-zinc-500">Loading data...</span>
-                        </div>
-                    </div>
-                  ) : (
-                    <div className="absolute inset-0 pt-4 pr-2 pb-2 pl-0">
-                        <Chart data={currentAsset} />
-                    </div>
-                  )}
+               <div className="flex-1 w-full relative overflow-hidden">
+                  <TradingViewChart symbol={activeSymbol} />
                </div>
 
                 {/* Chart Resize Handle */}
                <div 
-                 className="absolute bottom-0 left-0 right-0 h-1 cursor-row-resize hover:bg-primary/50 transition-colors z-50 group flex items-center justify-center"
+                 className="absolute bottom-0 left-0 right-0 h-8 translate-y-1/2 !cursor-row-resize z-[60] group flex items-center justify-center hover:bg-primary/5 active:bg-primary/10 transition-colors touch-none"
                  onMouseDown={startResizingChart}
                >
-                    <div className="w-16 h-1 rounded-full bg-zinc-700 group-hover:bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="w-24 h-1 rounded-full bg-zinc-600 group-hover:bg-primary opacity-50 group-hover:opacity-100 transition-all shadow-md"></div>
                </div>
            </div>
 
            {/* Lower Panel: Trade & Logs */}
-           <div id="bottom-panel" className="flex-1 flex min-h-0 relative overflow-hidden">
+           <div id="bottom-panel" className="flex-1 flex min-h-0 relative overflow-hidden bg-background">
               
               {/* Execution Panel */}
               <div style={{ width: `${executionPanelWidthPercent}%` }} className="border-r border-zinc-800 p-4 overflow-y-auto min-w-[200px] relative shrink-0">
@@ -541,7 +542,7 @@ const App: React.FC = () => {
 
                  {/* Panel Resize Handle */}
                  <div 
-                    className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors z-50 group flex items-center justify-center"
+                    className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors z-[60] group flex items-center justify-center touch-none"
                     onMouseDown={startResizingBottomPanel}
                  >
                      <div className="h-8 w-1 rounded-full bg-zinc-700 group-hover:bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -550,7 +551,7 @@ const App: React.FC = () => {
 
               {/* Logs & History */}
               <div className="flex-1 flex flex-col min-w-0">
-                 <div className="border-b border-zinc-800 p-2 flex gap-4 shrink-0 overflow-x-auto">
+                 <div className="border-b border-zinc-800 p-2 flex gap-4 shrink-0 overflow-x-auto bg-surface/30">
                     <div className="text-xs font-bold px-3 py-1.5 text-white border-b-2 border-primary whitespace-nowrap">AI Reasoning</div>
                     <div className="text-xs font-bold px-3 py-1.5 text-zinc-500 whitespace-nowrap">Order History</div>
                  </div>

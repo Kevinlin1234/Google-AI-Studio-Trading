@@ -1,19 +1,24 @@
-import { CoinSymbol } from '../types';
+
+import { CoinSymbol, CandleData } from '../types';
 
 const BASE_URL = 'https://api.binance.com/api/v3';
 const WS_URL = 'wss://stream.binance.com:9443/stream';
 
 export const getBinanceSymbol = (symbol: CoinSymbol) => `${symbol}USDT`.toLowerCase();
 
-interface BinanceKline {
-  time: string;
-  price: number;
-}
-
-// Fetch last 50 minutes of data for the chart
-export const fetchHistoricalPrices = async (symbol: CoinSymbol, limit: number = 50): Promise<BinanceKline[] | null> => {
+// Fetch last 60 minutes of data for the chart
+export const fetchHistoricalPrices = async (symbol: CoinSymbol, limit: number = 60): Promise<CandleData[] | null> => {
   try {
-    // Binance Kline format: [Open Time, Open, High, Low, Close, Volume, ...]
+    // Binance Kline format: 
+    // [
+    //   0: Open Time,
+    //   1: Open,
+    //   2: High,
+    //   3: Low,
+    //   4: Close,
+    //   5: Volume,
+    //   ...
+    // ]
     const response = await fetch(`${BASE_URL}/klines?symbol=${symbol}USDT&interval=1m&limit=${limit}`);
     
     if (!response.ok) {
@@ -24,7 +29,10 @@ export const fetchHistoricalPrices = async (symbol: CoinSymbol, limit: number = 
     
     return data.map((item: any) => ({
       time: new Date(item[0]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      price: parseFloat(item[4]) // Using Close price
+      open: parseFloat(item[1]),
+      high: parseFloat(item[2]),
+      low: parseFloat(item[3]),
+      close: parseFloat(item[4])
     }));
   } catch (error) {
     console.warn(`Failed to fetch history for ${symbol} (likely CORS). Using fallback.`, error);

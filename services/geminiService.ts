@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { CoinSymbol, AiDecision } from "../types";
 
@@ -8,7 +9,7 @@ const ai = new GoogleGenAI({ apiKey });
 export const analyzeMarket = async (
   symbol: CoinSymbol,
   currentPrice: number,
-  history: number[],
+  history: number[], // This receives array of close prices
   portfolioBalance: number
 ): Promise<AiDecision> => {
   if (!apiKey) {

@@ -1,3 +1,4 @@
+
 export type CoinSymbol = 'BTC' | 'ETH' | 'SOL' | 'DOGE';
 
 export enum OrderSide {
@@ -35,11 +36,19 @@ export interface Portfolio {
   assets: Record<CoinSymbol, Asset>;
 }
 
+export interface CandleData {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
 export interface MarketData {
   symbol: CoinSymbol;
   price: number;
   change24h: number; // percentage
-  history: { time: string; price: number }[];
+  history: CandleData[];
 }
 
 export interface AiDecision {
