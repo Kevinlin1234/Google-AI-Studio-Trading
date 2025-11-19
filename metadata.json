@@ -1,0 +1,5 @@
+{
+  "name": "NeuroTrade AI",
+  "description": "Advanced AI-driven cryptocurrency trading terminal utilizing Gemini 2.5 Flash for real-time market analysis and automated execution simulation for BTC, ETH, SOL, and DOGE.",
+  "requestFramePermissions": []
+}
